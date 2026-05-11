@@ -1,0 +1,74 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  rsshub:
+    image: diygod/rsshub:chromium-bundled
+    ports:
+      - "1200:1200"
+    environment:
+      CACHE_TYPE: redis
+      CACHE_EXPIRE: 3600
+      REDIS_URL: redis://redis:6379/2
+    restart: unless-stopped
+
+  worker-cpu:
+    build: .
+    command: celery -A src.celery_app worker -Q collect,extract,score,dispatch --concurrency=4 --loglevel=info
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - ollama
+      - rsshub
+    restart: unless-stopped
+
+  worker-gpu:
+    build: .
+    command: celery -A src.celery_app worker -Q summarize --concurrency=1 --loglevel=info
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  beat:
+    build: .
+    command: celery -A src.celery_app beat --loglevel=info
+    env_file: .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

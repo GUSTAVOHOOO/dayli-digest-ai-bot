@@ -1,0 +1,12 @@
+github:
+  - https://github.com/ollama/ollama/releases.atom
+arxiv:
+  - http://export.arxiv.org/rss/cs.AI
+blogs:
+  - https://openai.com/blog/rss.xml
+  - https://huggingface.co/blog/feed.xml
+youtube:
+  - https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg
+twitter:
+  - http://localhost:1200/twitter/user/_akhaliq
+  - http://localhost:1200/twitter/user/kaboroev
