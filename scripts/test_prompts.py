@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.config_loader import load_config
 
 OLLAMA_API = os.getenv('OLLAMA_API_URL', 'http://localhost:11434')
-MODEL = os.getenv('OLLAMA_MODEL', 'qwen3.5:9b')
+MODEL = os.getenv('OLLAMA_MODEL', 'qwen2.5:3b')
 
 SAMPLE_TEXTS = {
     'papers': """

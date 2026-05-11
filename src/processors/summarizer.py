@@ -11,7 +11,7 @@ from src.storage.redis_cache import add_to_dlq
 log = get_logger(__name__)
 
 OLLAMA_API_URL = os.getenv('OLLAMA_API_URL', 'http://localhost:11434')
-MODEL = "qwen3.5:9b"
+MODEL = os.getenv('OLLAMA_MODEL', 'qwen2.5:3b')
 TIMEOUT = 30.0
 
 _prompts_cache = None
