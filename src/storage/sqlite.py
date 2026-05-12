@@ -36,7 +36,8 @@ def init_db() -> None:
                 summary TEXT,
                 score REAL DEFAULT 0,
                 md5_hash TEXT UNIQUE NOT NULL,
-                status TEXT DEFAULT 'processed'
+                status TEXT DEFAULT 'processed',
+                analysis_json TEXT
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_source ON processed_articles(source)")
@@ -53,27 +54,31 @@ def save_article(article: Article) -> int:
     """Saves or updates an article in the database."""
     with get_connection() as conn:
         cursor = conn.execute("""
-            INSERT INTO processed_articles (url, title, source, date_published, summary, score, md5_hash, status)
-            VALUES (:url, :title, :source, :date_published, :summary, :score, :md5_hash, :status)
+            INSERT INTO processed_articles (url, title, source, date_published, summary, score, md5_hash, status, analysis_json)
+            VALUES (:url, :title, :source, :date_published, :summary, :score, :md5_hash, :status, :analysis_json)
             ON CONFLICT(md5_hash) DO UPDATE SET
                 summary = excluded.summary,
                 score = excluded.score,
-                status = excluded.status
+                status = excluded.status,
+                analysis_json = excluded.analysis_json
             RETURNING id
         """, article.to_dict())
         row = cursor.fetchone()
         conn.commit()
         return row[0] if row else 0
 
-def get_articles_by_date(date_str: str) -> List[Article]:
-    """Retrieves processed articles for a specific date (YYYY-MM-DD) with status 'processed'."""
+def get_articles_by_date(date_str: str, min_score: float = 0.0) -> List[Article]:
+    """Retrieves processed articles for a specific date (YYYY-MM-DD) with status 'processed' and valid score/summary."""
     with get_connection() as conn:
         cursor = conn.execute("""
-            SELECT * FROM processed_articles 
-            WHERE date_processed LIKE ? AND status = 'processed'
-        """, (f"{date_str}%",))
+            SELECT * FROM processed_articles
+            WHERE date_processed LIKE ? 
+            AND status = 'processed'
+            AND score >= ?
+            AND summary IS NOT NULL
+            AND summary != ''
+        """, (f"{date_str}%", min_score))
         return [Article.from_dict(dict(row)) for row in cursor.fetchall()]
-
 def get_last_digest_date() -> Optional[str]:
     """Retrieves the date of the last processed article."""
     with get_connection() as conn:

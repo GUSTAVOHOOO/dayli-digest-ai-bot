@@ -1,5 +1,5 @@
-import feedparser
 import httpx
+from datetime import datetime, timedelta
 from typing import List
 from src.collectors.base import BaseCollector
 from src.models.article import Article
@@ -15,8 +15,9 @@ class GitHubCollector(BaseCollector):
 
     def __init__(self):
         super().__init__()
-        config = load_config('config/feeds.yaml')
-        self.FEEDS = config.get('github', [])
+        self.api_url = "https://api.github.com/search/repositories"
+        # We search for these topics to find relevant AI projects
+        self.topics = ["llm", "generative-ai", "artificial-intelligence", "machine-learning"]
 
     def get_domain(self) -> str:
         return "github.com"
@@ -24,29 +25,60 @@ class GitHubCollector(BaseCollector):
     @circuit_breaker(source="github")
     def fetch(self) -> List[Article]:
         articles = []
-        for feed_url in self.FEEDS:
+        
+        # We look for repos created in the last 3 days
+        since_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
+        
+        for topic in self.topics:
             try:
-                response = httpx.get(feed_url, timeout=15.0)
+                # Query: topic:ai created:>YYYY-MM-DD sort:stars
+                query = f"topic:{topic} created:>{since_date}"
+                log.info("github_searching", topic=topic, query=query)
+                
+                response = httpx.get(
+                    self.api_url,
+                    params={
+                        "q": query,
+                        "sort": "stars",
+                        "order": "desc",
+                        "per_page": 5 # Top 5 per topic
+                    },
+                    headers={"User-Agent": "DailyDigestBot/1.0"},
+                    timeout=15.0
+                )
+                
+                if response.status_code == 403:
+                    log.warning("github_rate_limited", topic=topic)
+                    break
+                    
                 response.raise_for_status()
-                feed = feedparser.parse(response.text)
+                data = response.json()
 
-                for entry in feed.entries:
-                    title = entry.get('title', '')
-                    url = entry.get('link', '')
-                    date = entry.get('published', '')
+                for repo in data.get('items', []):
+                    title = repo.get('full_name', '')
+                    description = repo.get('description', '')
+                    url = repo.get('html_url', '')
+                    stars = repo.get('stargazers_count', 0)
+                    
+                    # We combine name and description for the "clean_text" so the analyzer has context
+                    full_content = f"Repository: {title}\nStars: {stars}\nDescription: {description}"
 
                     article = Article(
                         url=url,
-                        title=title,
+                        title=f"{title} (⭐{stars})",
                         source=self.source,
-                        date_published=date,
+                        date_published=repo.get('created_at', ''),
+                        # We inject the content here so extractor can use it if needed, 
+                        # but usually extractor will try to fetch the README.
+                        # For now, let's just use the metadata.
                     )
 
                     if not is_article_processed(article.md5_hash):
+                        # We'll let the extractor fetch the README for better analysis
                         articles.append(article)
 
             except Exception as e:
-                log.error("fetch_failed", source=self.source, url=feed_url, error=str(e))
-                raise
+                log.error("github_search_failed", topic=topic, error=str(e))
+                continue
 
         return articles

@@ -21,22 +21,32 @@ class TelegramFormatter:
         emoji = emojis.get(category.lower(), '📌')
         return f"<b>{emoji} {category.upper()}</b>"
 
-    def format_article(self, article: 'Article') -> str:
-        """Formats a single article as an HTML link and summary."""
-        # Note: 'Article' is passed as a dict or object depending on context
-        # We'll handle both but usually it's an object in the task
+    def format_article(self, article: 'Article', category: str) -> str:
+        """Formats a single article as a complete HTML message."""
         if isinstance(article, dict):
             url = article.get('url', '')
             title = article.get('title', 'Sem título')
             summary = article.get('summary', '')
+            score = article.get('score', 0.0)
         else:
             url = getattr(article, 'url', '')
             title = getattr(article, 'title', 'Sem título')
             summary = getattr(article, 'summary', '')
+            score = getattr(article, 'score', 0.0)
 
-        truncated_summary = summary[:200] + "…" if summary and len(summary) > 200 else summary or ""
-
-        return f"<a href='{url}'>{title}</a>\n<i>{truncated_summary}</i>"
+        emojis = {
+            'github': '🐙',
+            'papers': '📄',
+            'blogs': '📝',
+            'youtube': '📺',
+            'twitter': '🐦',
+        }
+        emoji = emojis.get(category.lower(), '📌')
+        
+        category_header = f"<b>{emoji} {category.upper()}</b> | Nota: {score:.1f}"
+        
+        # We don't truncate summary here; split_message will handle it if it exceeds 3800 chars
+        return f"{category_header}\n\n<b>{title}</b>\n🔗 <a href='{url}'>Acessar conteúdo</a>\n\n<i>{summary}</i>"
 
     def split_message(self, content: str, max_chars: int = 3800) -> List[str]:
         """Splits a long message into multiple parts, respecting line boundaries."""
@@ -68,32 +78,18 @@ class TelegramFormatter:
         return parts
 
     def format_digest(self, articles_by_category: dict, date: str) -> List[str]:
-        """Formats the entire digest, potentially splitting into multiple messages."""
+        """Formats the digest into a list of individual messages."""
         messages = []
-        header = self.format_header(date)
-        current_message = header
+        
+        # Start with the header
+        messages.append(self.format_header(date).strip())
 
         for category, articles in articles_by_category.items():
-            category_header = self.format_category(category)
-            category_content = "\n".join(self.format_article(a) for a in articles)
-            category_block = f"{category_header}\n{category_content}\n\n"
-
-            if len(current_message) + len(category_block) > 3800:
-                if current_message != header:
-                    messages.append(current_message.strip())
-                    current_message = category_block
-                else:
-                    # Even the first block is too big? Split it.
-                    # This is rare if max_chars is 3800 and items are small.
-                    messages.append(current_message.strip())
-                    split_parts = self.split_message(category_block, 3800)
-                    for part in split_parts[:-1]:
-                        messages.append(part)
-                    current_message = split_parts[-1] + "\n\n"
-            else:
-                current_message += category_block
-
-        if current_message.strip():
-            messages.append(current_message.strip())
+            for a in articles:
+                msg = self.format_article(a, category)
+                # Ensure it doesn't exceed Telegram's limit
+                split_parts = self.split_message(msg, 3800)
+                messages.extend(split_parts)
 
         return messages
+

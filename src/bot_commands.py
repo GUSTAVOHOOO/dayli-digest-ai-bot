@@ -97,9 +97,22 @@ async def retry_failed_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     log.info("dlq_retry_initiated", count=count)
     await update.message.reply_text(f"🔄 {count} artigos movidos para a fila de extração.")
 
+async def fetch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manually triggers the full news pipeline."""
+    from src.orchestrator import trigger_all
+    trigger_all.delay()
+    await update.message.reply_text(
+        "🚀 <b>Pipeline disparado!</b>\n\n"
+        "Estou vasculhando GitHub, Arxiv, Blogs e agora o Twitter.\n"
+        "Isso leva cerca de 1-3 minutos. Se eu encontrar algo relevante, você receberá o digest aqui.\n"
+        "<i>Caso não haja novidades nas fontes, eu te avisarei também.</i>",
+        parse_mode='HTML'
+    )
+
 def setup_handlers(app: Application):
-    """Registers all command handlers with the application."""
+    """Sets up all bot command handlers."""
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("status", status_handler))
     app.add_handler(CommandHandler("test", test_handler))
+    app.add_handler(CommandHandler("fetch", fetch_handler))
     app.add_handler(CommandHandler("retry_failed", retry_failed_handler))

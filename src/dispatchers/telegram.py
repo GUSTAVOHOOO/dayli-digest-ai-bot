@@ -94,9 +94,11 @@ def process_dispatch(self, chat_id: int = None):
         chat_id = int(os.getenv('ADMIN_CHAT_ID', '0'))
 
     today = datetime.now().strftime('%Y-%m-%d')
-    log.info("dispatch_started", chat_id=chat_id, date=today)
+    min_score = float(os.getenv('MIN_SCORE_THRESHOLD', '6.0'))
+    
+    log.info("dispatch_started", chat_id=chat_id, date=today, min_score=min_score)
 
-    articles = get_articles_by_date(today)
+    articles = get_articles_by_date(today, min_score=min_score)
 
     if not articles:
         log.info("no_articles_to_dispatch", chat_id=chat_id)

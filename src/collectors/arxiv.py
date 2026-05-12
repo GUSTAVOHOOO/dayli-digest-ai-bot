@@ -14,9 +14,9 @@ class ArxivCollector(BaseCollector):
     source = "papers"
 
     def __init__(self):
-        super().__init__()
         config = load_config('config/feeds.yaml')
         self.FEEDS = config.get('arxiv', [])
+        super().__init__()
 
     def get_domain(self) -> str:
         return "export.arxiv.org"

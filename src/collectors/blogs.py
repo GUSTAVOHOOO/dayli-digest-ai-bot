@@ -15,9 +15,9 @@ class BlogsCollector(BaseCollector):
     source = "blogs"
 
     def __init__(self):
-        super().__init__()
         config = load_config('config/feeds.yaml')
         self.FEEDS = config.get('blogs', [])
+        super().__init__()
 
     def get_domain(self) -> str:
         if self.FEEDS:

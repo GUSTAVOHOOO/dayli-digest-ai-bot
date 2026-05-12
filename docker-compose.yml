@@ -35,6 +35,8 @@ services:
     command: celery -A src.celery_app worker -Q collect,extract,score,dispatch --concurrency=4 --loglevel=info
     env_file: .env
     volumes:
+      - ./src:/app/src
+      - ./config:/app/config
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
@@ -48,6 +50,8 @@ services:
     command: celery -A src.celery_app worker -Q summarize --concurrency=1 --loglevel=info
     env_file: .env
     volumes:
+      - ./src:/app/src
+      - ./config:/app/config
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
@@ -66,8 +70,25 @@ services:
     build: .
     command: celery -A src.celery_app beat --loglevel=info
     env_file: .env
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
     depends_on:
       - redis
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: python src/bot.py
+    env_file: .env
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - worker-cpu
     restart: unless-stopped
 
 volumes:

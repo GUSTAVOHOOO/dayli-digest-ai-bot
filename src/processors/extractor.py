@@ -65,7 +65,11 @@ def extract_with_jina(url: str, md5_url: str = None) -> Optional[str]:
 def extract_with_trafilatura(url: str) -> Optional[str]:
     """Fallback extraction using trafilatura."""
     try:
-        result = trafilatura.extract(url, timeout=15)
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            return None
+            
+        result = trafilatura.extract(downloaded)
         if result:
             log.info("trafilatura_used", url=url, chars=len(result))
             return result.strip()
@@ -108,9 +112,9 @@ def process_extract(self, article_dict: dict):
     try:
         result = extract_article(article_dict)
         if result['status'] == 'processed':
-            # Import here to avoid circular dependency
-            from src.processors.summarizer import process_summarize
-            process_summarize.delay(result)
+            # Trigger Analyzer phase (NEW)
+            from src.processors.analyzer import process_analyze
+            process_analyze.delay(result)
         else:
             add_to_dlq(result, "extraction_failed")
         return result

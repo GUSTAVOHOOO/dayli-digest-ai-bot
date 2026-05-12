@@ -8,6 +8,8 @@ from src.utils.config_loader import load_env
 load_env()
 log = get_logger(__name__)
 
+from src.storage.sqlite import init_db
+
 def main():
     """Starts the Telegram bot."""
     token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -16,6 +18,9 @@ def main():
         return
 
     log.info("bot_initializing")
+    
+    # Initialize database
+    init_db()
     
     # Build application
     app = ApplicationBuilder().token(token).build()

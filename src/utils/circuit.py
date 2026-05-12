@@ -26,7 +26,7 @@ def get_circuit_breaker(source: str) -> pybreaker.CircuitBreaker:
             
         _breakers[source] = pybreaker.CircuitBreaker(
             fail_max=3,
-            timeout_duration=1800,  # 30 min
+            reset_timeout=1800,  # 30 min
             state_storage=storage,
         )
     return _breakers[source]

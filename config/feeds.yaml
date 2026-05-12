@@ -1,12 +1,32 @@
-github:
-  - https://github.com/ollama/ollama/releases.atom
+# Discovery keywords for search-based collectors
+keywords:
+  - "AI Agents"
+  - "LLM"
+  - "Generative AI"
+  - "Artificial Intelligence"
+  - "OpenAI"
+  - "Agentic AI"
+  - "Machine Learning"
+
+# High-signal accounts to follow when keyword search is unavailable
+twitter_users:
+  - "_akhaliq"      # Arxiv AI papers
+  - "karpathy"      # Andrej Karpathy
+  - "ylecun"        # Yann LeCun
+  - "bindureddy"    # Abacus AI
+  - "rowancheung"   # The Rundown AI
+  - "drjimfan"      # Jim Fan (Nvidia)
+
+youtube_channels:
+  - "UC5_mGqDshqR8_01Y2Wj_n1w" # Matthew Berman
+  - "UCbfYPyITQ-7l4upoX8nvctg" # Two Minute Papers
+  - "UC8wZnXYLpLbYeJ_S47zSInw" # AI Explained
+  - "UC74nZ9I9-YV_C3f5vIqA_7g" # Wes Roth
+
 arxiv:
-  - http://export.arxiv.org/rss/cs.AI
+  - https://export.arxiv.org/rss/cs.AI
 blogs:
   - https://openai.com/blog/rss.xml
   - https://huggingface.co/blog/feed.xml
-youtube:
-  - https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg
-twitter:
-  - http://localhost:1200/twitter/user/_akhaliq
-  - http://localhost:1200/twitter/user/kaboroev
+  - https://deepmind.google/blog/rss.xml
+  - https://anthropic.com/news/rss.xml

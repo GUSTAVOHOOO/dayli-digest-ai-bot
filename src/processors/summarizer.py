@@ -114,9 +114,9 @@ def process_summarize(self, article_dict: dict):
 
             log.info("summarize_completed", url=url, summary_len=len(summary))
 
-            # Trigger Scorer phase
-            from src.processors.scorer import process_score
-            process_score.delay(article_dict)
+            # Trigger Dispatch phase
+            from src.dispatchers.telegram import process_dispatch
+            process_dispatch.delay()
             return {"status": "ok", "summary": summary}
         else:
             raise Exception("summarize_returned_none")

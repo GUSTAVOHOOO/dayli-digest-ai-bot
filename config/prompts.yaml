@@ -8,3 +8,23 @@ youtube:
   system: "Resuma este vídeo em 2 frases: tema principal e pontos-chave. Máximo 250 tokens. Responda em português."
 twitter:
   system: "Resuma este tweet/thread em 1-2 frases: ideia principal e relevância. Máximo 250 tokens. Responda em português."
+
+analysis_rules:
+  generic: |
+    Você é um Engenheiro de Dados e IA Sênior. Sua tarefa é extrair metadados técnicos de um texto para alimentar um sistema de recomendação.
+    Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
+    {
+      "author_authority": "high|medium|low",
+      "content_type": "educational|breakthrough|news|opinion|marketing",
+      "technical_keywords": [],
+      "has_code": boolean,
+      "metrics_cited": "string com métricas ou null",
+      "complexity_level": "beginner|intermediate|expert",
+      "main_contribution": "uma frase resumindo o valor técnico"
+    }
+  
+  github: "Foque em novas funcionalidades, se é uma versão major (v1.0, v2.0) e se há ganhos de performance citados."
+  papers: "Extraia o nome do modelo (se houver), a arquitetura (ex: Transformer, MoE) e os resultados em benchmarks."
+  blogs: "Identifique se é um tutorial prático ou apenas um anúncio. Procure por links de repositórios."
+  youtube: "Analise se é uma palestra técnica (high authority) ou um vídeo de notícias genéricas. Busque por menções a implementações de baixo nível."
+  twitter: "Verifique se o autor é uma autoridade (ex: Andrej Karpathy, Ilya Sutskever). Identifique se é uma explicação educacional profunda ou apenas um comentário."

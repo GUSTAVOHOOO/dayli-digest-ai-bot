@@ -20,8 +20,10 @@ app.conf.task_queues = (
 
 # Routing
 app.conf.task_routes = {
+    'src.orchestrator.trigger_all': {'queue': 'collect'},
     'src.collectors.*': {'queue': 'collect'},
     'src.processors.extractor.*': {'queue': 'extract'},
+    'src.processors.analyzer.*': {'queue': 'extract'},
     'src.processors.summarizer.*': {'queue': 'summarize'},
     'src.processors.scorer.*': {'queue': 'score'},
     'src.orchestrator.process_dispatch_placeholder': {'queue': 'dispatch'},
@@ -32,6 +34,14 @@ app.conf.task_routes = {
 app.conf.task_acks_late = True
 app.conf.task_reject_on_worker_lost = True
 app.conf.worker_prefetch_multiplier = 1
+
+# Import tasks to ensure discovery (MUST be after app is defined but before it is used by workers)
+import src.orchestrator
+import src.processors.extractor
+import src.processors.analyzer
+import src.processors.summarizer
+import src.processors.scorer
+import src.dispatchers.telegram
 
 # Beat schedule
 from celery.schedules import crontab

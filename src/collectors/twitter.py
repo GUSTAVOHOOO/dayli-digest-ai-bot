@@ -1,5 +1,6 @@
 import feedparser
 import httpx
+import os
 from typing import List
 from src.collectors.base import BaseCollector
 from src.models.article import Article
@@ -16,28 +17,37 @@ class TwitterCollector(BaseCollector):
     def __init__(self):
         super().__init__()
         config = load_config('config/feeds.yaml')
-        self.FEEDS = config.get('twitter', [])
+        self.KEYWORDS = config.get('keywords', ["AI", "LLM"])
+        self.rsshub_base = os.getenv('RSSHUB_URL', 'http://rsshub:1200')
 
     def get_domain(self) -> str:
-        return "localhost" # RSSHub domain
+        return "twitter.com"
 
     @circuit_breaker(source="twitter")
     def fetch(self) -> List[Article]:
         articles = []
-        for feed_url in self.FEEDS:
+        config = load_config('config/feeds.yaml')
+        users = config.get('twitter_users', [])
+        
+        # We try users instead of keyword search because RSSHub needs Twitter API keys for keywords
+        for user in users:
+            feed_url = f"{self.rsshub_base}/twitter/user/{user}"
             try:
+                log.info("twitter_fetching_user", user=user)
                 response = httpx.get(feed_url, timeout=15.0)
-                response.raise_for_status()
-                feed = feedparser.parse(response.text)
+                if response.status_code != 200:
+                    log.warning("twitter_user_failed", user=user, status=response.status_code)
+                    continue
 
-                for entry in feed.entries:
+                feed = feedparser.parse(response.text)
+                for entry in feed.entries[:5]: # Top 5 tweets per user
                     title = entry.get('title', '')
                     url = entry.get('link', '')
                     date = entry.get('published', '')
 
                     article = Article(
                         url=url,
-                        title=title,
+                        title=f"@{user}: {title[:100]}...",
                         source=self.source,
                         date_published=date,
                     )
@@ -46,6 +56,6 @@ class TwitterCollector(BaseCollector):
                         articles.append(article)
 
             except Exception as e:
-                log.error("fetch_failed", source=self.source, url=feed_url, error=str(e))
+                log.error("fetch_failed", source=self.source, user=user, error=str(e))
 
         return articles
