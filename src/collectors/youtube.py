@@ -1,6 +1,7 @@
 import feedparser
 import httpx
 import os
+import yt_dlp
 from typing import List
 from src.collectors.base import BaseCollector
 from src.models.article import Article
@@ -18,6 +19,7 @@ class YouTubeCollector(BaseCollector):
         super().__init__()
         config = load_config('config/feeds.yaml')
         self.KEYWORDS = config.get('keywords', ["AI", "LLM"])
+        self.CHANNELS = config.get('youtube_channels', [])
         self.rsshub_base = os.getenv('RSSHUB_URL', 'http://rsshub:1200')
 
     def get_domain(self) -> str:
@@ -26,36 +28,53 @@ class YouTubeCollector(BaseCollector):
     @circuit_breaker(source="youtube")
     def fetch(self) -> List[Article]:
         articles = []
-        config = load_config('config/feeds.yaml')
-        channels = config.get('youtube_channels', [])
         
-        for channel_id in channels:
-            # RSSHub YouTube Channel: /youtube/channel/:id
-            feed_url = f"{self.rsshub_base}/youtube/channel/{channel_id}"
-            try:
-                log.info("youtube_fetching_channel", channel_id=channel_id)
-                response = httpx.get(feed_url, timeout=15.0)
-                if response.status_code != 200:
-                    log.warning("youtube_channel_failed", channel_id=channel_id, status=response.status_code)
-                    continue
-                
-                feed = feedparser.parse(response.text)
-                for entry in feed.entries[:3]: # Top 3 per channel
-                    title = entry.get('title', '')
-                    url = entry.get('link', '')
-                    date = entry.get('published', '')
+        # 1. Authority Channels via Official YouTube RSS
+        for channel_id in self.CHANNELS:
+            feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+            articles.extend(self._fetch_official_rss(feed_url))
 
-                    article = Article(
-                        url=url,
-                        title=title,
-                        source=self.source,
-                        date_published=date,
-                    )
-
-                    if not is_article_processed(article.md5_hash):
-                        articles.append(article)
-
-            except Exception as e:
-                log.error("fetch_failed", source=self.source, channel_id=channel_id, error=str(e))
+        # 2. Global Discovery via yt-dlp
+        for keyword in self.KEYWORDS:
+            articles.extend(self._fetch_yt_dlp(keyword))
 
         return articles
+
+    def _fetch_yt_dlp(self, keyword: str) -> List[Article]:
+        """Uses yt-dlp to find trending videos for a keyword."""
+        collected = []
+        try:
+            log.info("youtube_yt_dlp_searching", keyword=keyword)
+            ydl_opts = {'quiet': True, 'extract_flat': True, 'skip_download': True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Get top 3 results
+                info = ydl.extract_info(f"ytsearch3:{keyword}", download=False)
+                for entry in info.get('entries', []):
+                    url = f"https://www.youtube.com/watch?v={entry['id']}"
+                    article = Article(url=url, title=f"📺 SEARCH:{keyword}: {entry['title']}", 
+                                     source=self.source, date_published=None)
+                    if not is_article_processed(article.md5_hash):
+                        collected.append(article)
+        except Exception as e:
+            log.error("youtube_yt_dlp_failed", keyword=keyword, error=str(e))
+        return collected
+
+    def _fetch_official_rss(self, url: str) -> List[Article]:
+        collected = []
+        try:
+            log.info("youtube_fetching_official_rss", url=url)
+            response = httpx.get(url, timeout=20.0, follow_redirects=True)
+            if response.status_code != 200:
+                log.warning("youtube_official_rss_http_error", url=url, status=response.status_code)
+                return collected
+
+            feed = feedparser.parse(response.text)
+            channel_title = feed.feed.get('title', 'YouTube')
+            for entry in feed.entries[:3]:
+                article = Article(url=entry.get('link', ''), title=f"📺 {channel_title}: {entry.get('title', '')}",
+                                 source=self.source, date_published=entry.get('published', ''))
+                if not is_article_processed(article.md5_hash):
+                    collected.append(article)
+        except Exception as e:
+            log.error("youtube_official_rss_failed", url=url, error=str(e))
+        return collected

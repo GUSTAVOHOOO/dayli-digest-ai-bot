@@ -71,7 +71,11 @@ async def test_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     from src.dispatchers.telegram import process_dispatch
     # Run the task synchronously for the test
-    result = process_dispatch(chat_id=update.effective_chat.id)
+    result = process_dispatch(
+        chat_id=update.effective_chat.id,
+        mark_sent=False,
+        release_pipeline_lock=False,
+    )
 
     await update.message.reply_text(f"✅ Teste completo.\nMensagens enviadas: {result.get('sent', 0)}\nArtigos totais: {result.get('total_articles', 0)}")
 

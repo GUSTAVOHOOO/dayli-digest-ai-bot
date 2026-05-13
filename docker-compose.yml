@@ -28,11 +28,15 @@ services:
       CACHE_TYPE: redis
       CACHE_EXPIRE: 3600
       REDIS_URL: redis://redis:6379/2
+      TWITTER_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
+      TWITTER_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
+      TWITTER_ACCESS_TOKEN: ${TWITTER_ACCESS_TOKEN}
+      TWITTER_ACCESS_TOKEN_SECRET: ${TWITTER_ACCESS_TOKEN_SECRET}
     restart: unless-stopped
 
   worker-cpu:
     build: .
-    command: celery -A src.celery_app worker -Q collect,extract,score,dispatch --concurrency=4 --loglevel=info
+    command: celery -A src.celery_app worker -Q collect,extract,analyze,score,dispatch --concurrency=4 --loglevel=info
     env_file: .env
     volumes:
       - ./src:/app/src
@@ -81,6 +85,8 @@ services:
     build: .
     command: python src/bot.py
     env_file: .env
+    ports:
+      - "18080:8080"
     volumes:
       - ./src:/app/src
       - ./config:/app/config

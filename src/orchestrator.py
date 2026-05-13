@@ -18,7 +18,7 @@ COLLECTORS = [
     TwitterCollector,
 ]
 
-GLOBAL_MAX_ARTICLES = 100
+GLOBAL_MAX_ARTICLES = 400
 
 @app.task(name='src.orchestrator.trigger_all', bind=True)
 def trigger_all(self):
@@ -48,6 +48,11 @@ def trigger_all(self):
         random.shuffle(all_articles) # Randomize to avoid one source dominating the start
         
         articles_to_queue = all_articles[:GLOBAL_MAX_ARTICLES]
+
+        if not articles_to_queue:
+            release_digest_lock(today)
+            log.info("trigger_all_completed", total_collected=0, total_found=0)
+            return {"status": "ok", "collected": 0, "date": today}
         
         # Queue for extract phase
         from src.processors.extractor import process_extract
@@ -57,17 +62,6 @@ def trigger_all(self):
         log.info("trigger_all_completed", total_collected=len(articles_to_queue), total_found=len(all_articles))
         return {"status": "ok", "collected": len(articles_to_queue), "date": today}
 
-    finally:
+    except Exception:
         release_digest_lock(today)
-
-@app.task(name='src.orchestrator.process_dispatch_placeholder', bind=True)
-def process_dispatch_placeholder(self, article_dict):
-    """Triggers the real telegram dispatch."""
-    log.info("triggering_real_dispatch", url=article_dict.get('url'))
-    from src.dispatchers.telegram import process_dispatch
-    # We delay the dispatch slightly to allow other articles in the same batch to finish
-    # or we could use a separate trigger. For now, let's call the real one.
-    process_dispatch.delay()
-    pass
-
-# Delete old process_extract placeholder
+        raise

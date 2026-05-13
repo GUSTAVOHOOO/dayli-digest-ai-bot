@@ -92,7 +92,10 @@ def process_analyze(self, article_dict: dict):
         process_score.delay(article_dict)
         return {"status": "ok", "analysis": analysis}
     else:
-        # If analysis fails, we still go to score but it might be lower
+        if article_dict.get('clean_text') and self.request.retries < self.max_retries:
+            raise self.retry(countdown=30 * (self.request.retries + 1))
+
+        # If analysis keeps failing, we still go to score but it might be lower
         from src.processors.scorer import process_score
         process_score.delay(article_dict)
         return {"status": "failed", "reason": "analysis_returned_none"}

@@ -1,4 +1,4 @@
-# Discovery keywords for search-based collectors
+# Discovery keywords for YouTube (used by yt-dlp)
 keywords:
   - "AI Agents"
   - "LLM"
@@ -8,25 +8,19 @@ keywords:
   - "Agentic AI"
   - "Machine Learning"
 
-# High-signal accounts to follow when keyword search is unavailable
-twitter_users:
-  - "_akhaliq"      # Arxiv AI papers
-  - "karpathy"      # Andrej Karpathy
-  - "ylecun"        # Yann LeCun
-  - "bindureddy"    # Abacus AI
-  - "rowancheung"   # The Rundown AI
-  - "drjimfan"      # Jim Fan (Nvidia)
-
+# YouTube Reference Channels (Official UC IDs)
 youtube_channels:
-  - "UC5_mGqDshqR8_01Y2Wj_n1w" # Matthew Berman
+  - "UCawZsQWqfGSbCI5yjkdVkTA" # Matthew Berman
   - "UCbfYPyITQ-7l4upoX8nvctg" # Two Minute Papers
-  - "UC8wZnXYLpLbYeJ_S47zSInw" # AI Explained
-  - "UC74nZ9I9-YV_C3f5vIqA_7g" # Wes Roth
+  - "UCmFOjlpYEhxf_wJUDuz6xxQ" # AI Explained
+  - "UCqcbQf6yw5KzRoDDcZ_wBSw" # Wes Roth
+  - "UCcefcZRL2oaA_uBNeo5UOWg" # Andrej Karpathy
 
+# Arxiv and Blogs (General high-quality feeds)
 arxiv:
   - https://export.arxiv.org/rss/cs.AI
 blogs:
-  - https://openai.com/blog/rss.xml
+  - https://openai.com/news/rss.xml
   - https://huggingface.co/blog/feed.xml
   - https://deepmind.google/blog/rss.xml
-  - https://anthropic.com/news/rss.xml
+  - http://rsshub:1200/anthropic/news

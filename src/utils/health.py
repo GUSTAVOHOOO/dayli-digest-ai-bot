@@ -38,7 +38,7 @@ class HealthChecker:
         """Verifies SQLite connection and query execution."""
         try:
             conn = sqlite3.connect(DB_PATH)
-            conn.execute("SELECT 1")
+            conn.execute("SELECT 1 FROM processed_articles LIMIT 1")
             conn.close()
             return True
         except Exception:

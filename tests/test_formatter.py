@@ -23,8 +23,20 @@ def test_format_article(formatter):
     """Tests individual article formatting."""
     article = {'url': 'http://test.com', 'title': 'Test Title', 'summary': 'Short summary'}
     result = formatter.format_article(article)
-    assert '<a href=\'http://test.com\'>Test Title</a>' in result
+    assert "<b>Test Title</b>" in result
+    assert "<a href='http://test.com'>Acessar conteúdo</a>" in result
     assert '<i>Short summary</i>' in result
+
+def test_format_article_escapes_html(formatter):
+    article = {
+        'url': "http://test.com?a='x'",
+        'title': '<bad>',
+        'summary': 'A & B',
+    }
+    result = formatter.format_article(article)
+    assert '&lt;bad&gt;' in result
+    assert 'A &amp; B' in result
+    assert "a=&#x27;x&#x27;" in result
 
 def test_split_message_keeps_lines_intact(formatter):
     """Tests if message splitting respects line boundaries and limits."""
@@ -37,8 +49,7 @@ def test_split_message_keeps_lines_intact(formatter):
         assert len(lines) > 0
 
 def test_truncate_long_summary(formatter):
-    """Tests summary truncation in format_article."""
+    """Tests long summary is preserved for split_message."""
     article = {'url': 'http://test.com', 'title': 'T', 'summary': 'A' * 500}
     result = formatter.format_article(article)
-    assert '…</i>' in result
-    assert len(result) < 600 # Much less than 500+ formatting
+    assert ('A' * 500) in result

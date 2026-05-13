@@ -14,12 +14,12 @@ def calculate_intelligent_score(analysis: dict) -> float:
     score = 0.0
     
     # Authority (Max 3.0)
-    authority = analysis.get('author_authority', 'low')
+    authority = analysis.get('author_authority')
     if authority == 'high': score += 3.0
     elif authority == 'medium': score += 1.5
     
     # Content Type (Max 3.0)
-    ctype = analysis.get('content_type', 'news')
+    ctype = analysis.get('content_type')
     if ctype == 'breakthrough': score += 3.0
     elif ctype == 'educational': score += 2.5
     elif ctype == 'news': score += 1.0
@@ -27,7 +27,7 @@ def calculate_intelligent_score(analysis: dict) -> float:
     # Technical Signals (Max 4.0)
     if analysis.get('has_code'): score += 2.0
     
-    complexity = analysis.get('complexity_level', 'beginner')
+    complexity = analysis.get('complexity_level')
     if complexity == 'expert': score += 2.0
     elif complexity == 'intermediate': score += 1.0
     

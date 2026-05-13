@@ -1,3 +1,4 @@
+from html import escape
 from typing import List
 
 class TelegramFormatter:
@@ -21,7 +22,7 @@ class TelegramFormatter:
         emoji = emojis.get(category.lower(), '📌')
         return f"<b>{emoji} {category.upper()}</b>"
 
-    def format_article(self, article: 'Article', category: str) -> str:
+    def format_article(self, article: 'Article', category: str = 'blogs') -> str:
         """Formats a single article as a complete HTML message."""
         if isinstance(article, dict):
             url = article.get('url', '')
@@ -43,10 +44,13 @@ class TelegramFormatter:
         }
         emoji = emojis.get(category.lower(), '📌')
         
-        category_header = f"<b>{emoji} {category.upper()}</b> | Nota: {score:.1f}"
+        category_header = f"<b>{emoji} {escape(category.upper())}</b> | Nota: {score:.1f}"
+        safe_title = escape(title or 'Sem título')
+        safe_url = escape(url or '', quote=True)
+        safe_summary = escape(summary or '')
         
         # We don't truncate summary here; split_message will handle it if it exceeds 3800 chars
-        return f"{category_header}\n\n<b>{title}</b>\n🔗 <a href='{url}'>Acessar conteúdo</a>\n\n<i>{summary}</i>"
+        return f"{category_header}\n\n<b>{safe_title}</b>\n🔗 <a href='{safe_url}'>Acessar conteúdo</a>\n\n<i>{safe_summary}</i>"
 
     def split_message(self, content: str, max_chars: int = 3800) -> List[str]:
         """Splits a long message into multiple parts, respecting line boundaries."""
@@ -92,4 +96,3 @@ class TelegramFormatter:
                 messages.extend(split_parts)
 
         return messages
-

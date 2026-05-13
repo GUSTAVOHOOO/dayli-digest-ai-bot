@@ -1,12 +1,13 @@
 import httpx
 import os
+from datetime import datetime
 from typing import Optional
 from src.utils.logger import get_logger
 from src.utils.config_loader import load_config
 from src.celery_app import app
 from src.models.article import Article
 from src.storage.sqlite import save_article
-from src.storage.redis_cache import add_to_dlq
+from src.storage.redis_cache import add_to_dlq, acquire_dispatch_schedule_lock
 
 log = get_logger(__name__)
 
@@ -114,9 +115,13 @@ def process_summarize(self, article_dict: dict):
 
             log.info("summarize_completed", url=url, summary_len=len(summary))
 
-            # Trigger Dispatch phase
-            from src.dispatchers.telegram import process_dispatch
-            process_dispatch.delay()
+            today = datetime.now().strftime('%Y-%m-%d')
+            if acquire_dispatch_schedule_lock(today):
+                from src.dispatchers.telegram import process_dispatch
+                process_dispatch.apply_async(countdown=60)
+                log.info("dispatch_scheduled", date=today, delay_seconds=60)
+            else:
+                log.info("dispatch_already_scheduled", date=today)
             return {"status": "ok", "summary": summary}
         else:
             raise Exception("summarize_returned_none")

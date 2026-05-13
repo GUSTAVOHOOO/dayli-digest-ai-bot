@@ -15,8 +15,10 @@ def get_connection():
     # Ensure directory exists
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     try:
         yield conn
     finally:
@@ -46,12 +48,14 @@ def init_db() -> None:
 
 def is_article_processed(md5_hash: str) -> bool:
     """Checks if an article has already been processed based on its MD5 hash."""
+    init_db()
     with get_connection() as conn:
         cursor = conn.execute("SELECT 1 FROM processed_articles WHERE md5_hash = ?", (md5_hash,))
         return cursor.fetchone() is not None
 
 def save_article(article: Article) -> int:
     """Saves or updates an article in the database."""
+    init_db()
     with get_connection() as conn:
         cursor = conn.execute("""
             INSERT INTO processed_articles (url, title, source, date_published, summary, score, md5_hash, status, analysis_json)
@@ -69,6 +73,7 @@ def save_article(article: Article) -> int:
 
 def get_articles_by_date(date_str: str, min_score: float = 0.0) -> List[Article]:
     """Retrieves processed articles for a specific date (YYYY-MM-DD) with status 'processed' and valid score/summary."""
+    init_db()
     with get_connection() as conn:
         cursor = conn.execute("""
             SELECT * FROM processed_articles
@@ -81,6 +86,7 @@ def get_articles_by_date(date_str: str, min_score: float = 0.0) -> List[Article]
         return [Article.from_dict(dict(row)) for row in cursor.fetchall()]
 def get_last_digest_date() -> Optional[str]:
     """Retrieves the date of the last processed article."""
+    init_db()
     with get_connection() as conn:
         cursor = conn.execute("SELECT MAX(date_processed) FROM processed_articles")
         row = cursor.fetchone()

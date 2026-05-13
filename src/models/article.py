@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 import hashlib
+from urllib.parse import urlsplit, urlunsplit
 
 @dataclass
 class Article:
@@ -19,10 +20,15 @@ class Article:
 
     def __post_init__(self):
         if not self.md5_hash:
-            # Generate MD5 hash of URL + Title for deduplication
-            self.md5_hash = hashlib.md5(
-                f"{self.url}{self.title or ''}".encode()
-            ).hexdigest()
+            parsed = urlsplit(self.url)
+            normalized_url = urlunsplit((
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                parsed.path.rstrip('/'),
+                parsed.query,
+                '',
+            ))
+            self.md5_hash = hashlib.md5(normalized_url.encode()).hexdigest()
 
     @staticmethod
     def from_dict(data: dict) -> 'Article':

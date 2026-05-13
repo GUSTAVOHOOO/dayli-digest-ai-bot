@@ -50,6 +50,20 @@ def release_digest_lock(date: str):
     except redis.RedisError:
         pass
 
+def acquire_dispatch_schedule_lock(date: str, ttl_seconds: int = 120) -> bool:
+    """Prevents scheduling many dispatch tasks while summaries finish in a burst."""
+    try:
+        return bool(get_redis().set(f"dispatch:scheduled:{date}", "scheduled", nx=True, ex=ttl_seconds))
+    except redis.RedisError:
+        return True
+
+def release_dispatch_schedule_lock(date: str):
+    """Allows a later dispatch schedule after the current dispatch has run."""
+    try:
+        get_redis().delete(f"dispatch:scheduled:{date}")
+    except redis.RedisError:
+        pass
+
 # DLQ Helpers
 def add_to_dlq(article_dict: dict, reason: str):
     """Real DLQ implementation from src.utils.dlq."""

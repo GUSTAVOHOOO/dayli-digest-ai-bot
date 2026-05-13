@@ -2,6 +2,7 @@ import httpx
 import hashlib
 import time
 import trafilatura
+import asyncio
 from typing import Optional
 from src.storage.redis_cache import get_jina_cache, set_jina_cache, add_to_dlq
 from src.utils.logger import get_logger
@@ -12,20 +13,66 @@ from src.celery_app import app
 log = get_logger(__name__)
 
 TIMEOUT = 15.0
-JINA_BASE_URL = "https://r.jina.ai/http://"
+JINA_BASE_URL = "https://r.jina.ai/"
+
+async def extract_with_crawl4ai_async(url: str) -> Optional[str]:
+    """Asynchronous extraction using Crawl4AI with stealth mode."""
+    try:
+        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+        from crawl4ai.content_filter_strategy import PruningContentFilter
+        from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+        
+        browser_config = BrowserConfig(
+            headless=True,
+            browser_type="chromium",
+        )
+        
+        run_config = CrawlerRunConfig(
+            word_count_threshold=10,
+            markdown_generator=DefaultMarkdownGenerator(
+                content_filter=PruningContentFilter(),
+            ),
+            cache_mode=CacheMode.BYPASS, # We handle caching at the orchestrator level
+            process_iframes=False,
+            remove_overlay_elements=True,
+            check_robots_txt=True,
+            # Stealth mode features
+            magic=True, 
+            simulate_user=True,
+            override_navigator=True
+        )
+
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            result = await crawler.arun(url=url, config=run_config)
+            if result.success and result.markdown:
+                log.info("crawl4ai_success", url=url, chars=len(result.markdown))
+                return result.markdown
+            else:
+                log.warning("crawl4ai_failed", url=url, error=result.error_message)
+                return None
+    except ImportError:
+        log.error("crawl4ai_not_installed")
+        return None
+    except Exception as e:
+        log.error("crawl4ai_error", url=url, error=str(e))
+        return None
+
+def extract_with_crawl4ai(url: str) -> Optional[str]:
+    """Sync wrapper for Crawl4AI extraction."""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(extract_with_crawl4ai_async(url))
 
 def extract_with_jina(url: str, md5_url: str = None) -> Optional[str]:
     """Extracts content from a URL using Jina AI Reader with Redis caching."""
     if md5_url is None:
         md5_url = hashlib.md5(url.encode()).hexdigest()
 
-    cached = get_jina_cache(md5_url)
-    if cached:
-        log.info("jina_cache_hit", url=url)
-        return cached
-
-    log.info("jina_cache_miss", url=url)
-
+    # Caching handled in extract_article now for consistency
     try:
         response = httpx.get(
             f"{JINA_BASE_URL}{url}",
@@ -46,8 +93,7 @@ def extract_with_jina(url: str, md5_url: str = None) -> Optional[str]:
         content = response.text.strip()
 
         if content:
-            set_jina_cache(md5_url, content)
-            log.info("extraction_completed", url=url, chars=len(content))
+            log.info("jina_extraction_completed", url=url, chars=len(content))
             return content
 
         return None
@@ -79,14 +125,37 @@ def extract_with_trafilatura(url: str) -> Optional[str]:
         return None
 
 def extract_article(article_dict: dict) -> dict:
-    """Main extraction logic: Jina AI -> Trafilatura fallback."""
+    """Main extraction logic: Crawl4AI -> Jina AI -> Trafilatura fallback."""
     url = article_dict['url']
     md5_url = article_dict.get('md5_hash', '')
 
     log.info("extraction_started", url=url)
 
-    content = extract_with_jina(url, md5_url)
+    existing_content = article_dict.get('clean_text')
+    if existing_content and len(existing_content) > 100:
+        log.info("extraction_content_supplied", url=url, chars=len(existing_content))
+        article_dict['status'] = 'processed'
+        article = Article.from_dict(article_dict)
+        save_article(article)
+        return article_dict
 
+    # 1. Try Cache First
+    cached = get_jina_cache(md5_url)
+    if cached:
+        log.info("extraction_cache_hit", url=url)
+        article_dict['clean_text'] = cached
+        article_dict['status'] = 'processed'
+        return article_dict
+
+    # 2. Try Crawl4AI (Best for anti-bot/modern sites)
+    content = extract_with_crawl4ai(url)
+
+    # 3. Fallback to Jina
+    if not content:
+        log.warning("crawl4ai_failed_trying_jina", url=url)
+        content = extract_with_jina(url, md5_url)
+
+    # 4. Fallback to Trafilatura
     if not content:
         log.warning("jina_failed_trying_trafilatura", url=url)
         content = extract_with_trafilatura(url)
@@ -94,6 +163,7 @@ def extract_article(article_dict: dict) -> dict:
     if content and len(content) > 100:
         article_dict['clean_text'] = content
         article_dict['status'] = 'processed'
+        set_jina_cache(md5_url, content) # Save back to cache
         log.info("extraction_completed", url=url, chars=len(content))
     else:
         article_dict['clean_text'] = None
@@ -112,7 +182,7 @@ def process_extract(self, article_dict: dict):
     try:
         result = extract_article(article_dict)
         if result['status'] == 'processed':
-            # Trigger Analyzer phase (NEW)
+            # Trigger Analyzer phase
             from src.processors.analyzer import process_analyze
             process_analyze.delay(result)
         else:
@@ -120,4 +190,7 @@ def process_extract(self, article_dict: dict):
         return result
     except Exception as e:
         log.error("process_extract_error", url=article_dict.get('url'), error=str(e))
+        if self.request.retries >= self.max_retries:
+            add_to_dlq(article_dict, str(e))
+            return {"status": "failed", "reason": str(e)}
         raise self.retry(exc=e, countdown=60)

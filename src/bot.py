@@ -9,6 +9,7 @@ load_env()
 log = get_logger(__name__)
 
 from src.storage.sqlite import init_db
+from src.utils.health import start_health_server
 
 def main():
     """Starts the Telegram bot."""
@@ -21,6 +22,7 @@ def main():
     
     # Initialize database
     init_db()
+    start_health_server()
     
     # Build application
     app = ApplicationBuilder().token(token).build()

@@ -1,3 +1,4 @@
+import os
 from celery import Celery
 from kombu import Queue
 from src.utils.config_loader import load_config
@@ -8,10 +9,16 @@ app = Celery('digestbot')
 config = load_config('config/celery.yaml')
 app.conf.update(config.get('celery', {}))
 
+redis_url = os.getenv('REDIS_URL')
+if redis_url:
+    app.conf.broker_url = redis_url
+    app.conf.result_backend = os.getenv('CELERY_RESULT_BACKEND', redis_url.replace('/0', '/1', 1))
+
 # Queues
 app.conf.task_queues = (
     Queue('collect', routing_key='collect.#'),
     Queue('extract', routing_key='extract.#'),
+    Queue('analyze', routing_key='analyze.#'),
     Queue('summarize', routing_key='summarize.#'),
     Queue('score', routing_key='score.#'),
     Queue('dispatch', routing_key='dispatch.#'),
@@ -23,10 +30,9 @@ app.conf.task_routes = {
     'src.orchestrator.trigger_all': {'queue': 'collect'},
     'src.collectors.*': {'queue': 'collect'},
     'src.processors.extractor.*': {'queue': 'extract'},
-    'src.processors.analyzer.*': {'queue': 'extract'},
+    'src.processors.analyzer.*': {'queue': 'analyze'},
     'src.processors.summarizer.*': {'queue': 'summarize'},
     'src.processors.scorer.*': {'queue': 'score'},
-    'src.orchestrator.process_dispatch_placeholder': {'queue': 'dispatch'},
     'src.dispatchers.*': {'queue': 'dispatch'},
 }
 

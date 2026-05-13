@@ -1,34 +1,29 @@
 import pytest
-from src.processors.scorer import calculate_score, MIN_SCORE_THRESHOLD
+from src.processors.scorer import calculate_intelligent_score, MIN_SCORE_THRESHOLD
 
-def test_positive_keywords():
-    """Tests if positive keywords correctly increase the score."""
-    text = "This is a SOTA benchmark with GPT-5 breakthrough"
-    score = calculate_score(text)
-    # SOTA(+1), benchmark(+1), GPT-5(+1), breakthrough(+1) = 4.0
-    assert score == 4.0
+def test_high_value_analysis_scores_high():
+    analysis = {
+        'author_authority': 'high',
+        'content_type': 'breakthrough',
+        'has_code': True,
+        'complexity_level': 'expert',
+        'technical_keywords': ['llm', 'benchmark', 'agents'],
+    }
 
-def test_neutral_keywords():
-    """Tests if neutral keywords correctly increase the score."""
-    text = "This is a demo review"
-    score = calculate_score(text)
-    # demo(+0.5), review(+0.5) = 1.0
-    assert score == 1.0
+    assert calculate_intelligent_score(analysis) == 10.0
 
-def test_max_score():
-    """Tests if the score is correctly capped at MAX_SCORE (5.0)."""
-    text = "SOTA benchmark GPT-5 DeepSeek open source vulnerability breakthrough demo review opinion"
-    score = calculate_score(text)
-    assert score == 5.0
+def test_medium_analysis_scores_partially():
+    analysis = {
+        'author_authority': 'medium',
+        'content_type': 'educational',
+        'has_code': False,
+        'complexity_level': 'intermediate',
+        'technical_keywords': ['transformer', 'rag'],
+    }
 
-def test_empty_text():
-    """Tests if empty or None text returns a score of 0.0."""
-    assert calculate_score("") == 0.0
-    assert calculate_score(None) == 0.0
+    assert calculate_intelligent_score(analysis) == 5.4
 
-def test_threshold():
-    """Tests if the score behaves correctly relative to the MIN_SCORE_THRESHOLD."""
-    text = "Just a simple demo"
-    score = calculate_score(text)
-    assert score == 0.5
+def test_empty_analysis_stays_below_threshold():
+    score = calculate_intelligent_score({})
+    assert score == 0.0
     assert score < MIN_SCORE_THRESHOLD

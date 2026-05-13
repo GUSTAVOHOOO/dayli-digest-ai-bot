@@ -68,9 +68,7 @@ class GitHubCollector(BaseCollector):
                         title=f"{title} (⭐{stars})",
                         source=self.source,
                         date_published=repo.get('created_at', ''),
-                        # We inject the content here so extractor can use it if needed, 
-                        # but usually extractor will try to fetch the README.
-                        # For now, let's just use the metadata.
+                        clean_text=full_content,
                     )
 
                     if not is_article_processed(article.md5_hash):

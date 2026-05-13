@@ -1,9 +1,9 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime
+import json
 
 def test_pipeline_flow():
-    """Tests the conceptual flow of the pipeline from extraction to scoring."""
+    """Tests the conceptual flow of the pipeline from extraction to intelligent scoring."""
     article = {
         'url': 'http://test.com',
         'title': 'Test',
@@ -12,13 +12,13 @@ def test_pipeline_flow():
         'date_published': datetime.now().isoformat(),
     }
 
-    with patch('src.processors.extractor.extract_with_jina') as mock_jina, \
+    with patch('src.processors.extractor.extract_with_crawl4ai') as mock_crawl, \
          patch('src.processors.summarizer.summarize') as mock_summarize, \
          patch('src.storage.sqlite.save_article') as mock_save:
 
         # 1. Extraction
         content = "Extracted content about SOTA AI benchmark. " * 5
-        mock_jina.return_value = content
+        mock_crawl.return_value = content
         from src.processors.extractor import extract_article
         result = extract_article(article.copy())
         
@@ -34,24 +34,21 @@ def test_pipeline_flow():
         assert result['summary'] == "This is a SOTA benchmark summary with GPT-5"
 
         # 3. Scoring
-        from src.processors.scorer import calculate_score
-        score = calculate_score(result['summary'])
+        from src.processors.scorer import calculate_intelligent_score
+        score = calculate_intelligent_score({
+            'author_authority': 'high',
+            'content_type': 'breakthrough',
+            'has_code': True,
+            'complexity_level': 'expert',
+            'technical_keywords': ['sota', 'benchmark', 'gpt'],
+        })
         
-        assert score >= 3.0  # SOTA(1) + benchmark(1) + GPT-5(1) = 3.0
-        # POSITIVE_KEYWORDS = {"SOTA", "state-of-the-art", "benchmark", "GPT-5", "DeepSeek", "open source", "vulnerability", "breakthrough"}
-        # "SOTA benchmark" has SOTA and benchmark -> 2.0
-        # If I want it to be >= 3.0, I need more keywords or check logic
-        # Text "This is a SOTA benchmark summary" -> SOTA(1), benchmark(1) -> 2.0
-        # Let's adjust expected score or input text
-        
-        text_high_score = "SOTA benchmark GPT-5 breakthrough"
-        assert calculate_score(text_high_score) == 4.0
+        assert score == 10.0
 
 def test_skip_low_score_articles():
     """Tests if low score articles are correctly identified."""
-    from src.processors.scorer import calculate_score
-    summary = "Just a simple demo"
-    score = calculate_score(summary)
+    from src.processors.scorer import calculate_intelligent_score
+    score = calculate_intelligent_score({})
     assert score < 3.0
 
 def test_orchestrator_skips_if_locked():

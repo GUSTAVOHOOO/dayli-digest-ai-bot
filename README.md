@@ -53,7 +53,7 @@ O bot utiliza uma arquitetura baseada em filas (Celery) para processamento assí
 
 5.  **Teste o Health Check:**
     ```bash
-    curl http://localhost:8080/health
+    curl http://localhost:18080/health
     ```
 
 ## ⚙️ Configuração (.env)
@@ -82,7 +82,7 @@ Os logs são gerados em formato JSON em `logs/digest.log` e possuem rotação au
 
 - **Métricas:** Filtre por `"metric"` para ver contadores de artigos.
 - **DLQ:** Artigos com falha crítica são registrados em `logs/failed_articles.jsonl`.
-- **Health:** Endpoint disponível em `http://localhost:8080/health`.
+- **Health:** Endpoint disponível em `http://localhost:18080/health`.
 
 ## 🧪 Testes
 

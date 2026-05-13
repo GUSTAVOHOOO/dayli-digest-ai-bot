@@ -19,14 +19,14 @@ class TelegramDispatcher:
     def __init__(self):
         if not BOT_TOKEN:
             log.error("telegram_token_missing")
-            # We don't raise here to allow the class to be instantiated for imports/tests
-            # but methods will fail if token is empty
-        self.bot = Bot(token=BOT_TOKEN)
+            self.bot = None
+        else:
+            self.bot = Bot(token=BOT_TOKEN)
         self.rate_limit_delay = 1.0  # seconds between messages
 
     async def _send_single(self, chat_id: int, text: str) -> bool:
         """Sends a single message to a chat."""
-        if not BOT_TOKEN:
+        if not self.bot:
             log.error("send_failed_token_missing")
             return False
 
@@ -82,13 +82,14 @@ class TelegramDispatcher:
 from datetime import datetime
 from src.celery_app import app
 from src.storage.sqlite import get_articles_by_date, save_article
+from src.storage.redis_cache import release_digest_lock, release_dispatch_schedule_lock
 
 @app.task(
     name='src.dispatchers.telegram.process_dispatch',
     bind=True,
     acks_late=True,
 )
-def process_dispatch(self, chat_id: int = None):
+def process_dispatch(self, chat_id: int = None, mark_sent: bool = True, release_pipeline_lock: bool = True):
     """Celery task to dispatch processed articles to Telegram."""
     if chat_id is None:
         chat_id = int(os.getenv('ADMIN_CHAT_ID', '0'))
@@ -100,33 +101,45 @@ def process_dispatch(self, chat_id: int = None):
 
     articles = get_articles_by_date(today, min_score=min_score)
 
-    if not articles:
-        log.info("no_articles_to_dispatch", chat_id=chat_id)
-        return {"status": "ok", "sent": 0}
+    try:
+        if not articles:
+            log.info("no_articles_to_dispatch", chat_id=chat_id)
+            return {"status": "ok", "sent": 0}
 
-    articles_by_category = {}
-    for article in articles:
-        source = article.source
-        if source not in articles_by_category:
-            articles_by_category[source] = []
-        articles_by_category[source].append(article)
+        articles_by_category = {}
+        for article in articles:
+            source = article.source
+            if source not in articles_by_category:
+                articles_by_category[source] = []
+            articles_by_category[source].append(article)
 
-    # Sort each category by score descending
-    for source in articles_by_category:
-        articles_by_category[source].sort(key=lambda a: a.score, reverse=True)
+        # Sort each category by score descending
+        for source in articles_by_category:
+            articles_by_category[source].sort(key=lambda a: a.score, reverse=True)
 
-    from src.dispatchers.formatter import TelegramFormatter
-    formatter = TelegramFormatter()
-    messages = formatter.format_digest(articles_by_category, today)
+        from src.dispatchers.formatter import TelegramFormatter
+        formatter = TelegramFormatter()
+        messages = formatter.format_digest(articles_by_category, today)
 
-    dispatcher = TelegramDispatcher()
-    sent_count = dispatcher.send_messages_sync(chat_id, messages)
+        dispatcher = TelegramDispatcher()
+        sent_count = dispatcher.send_messages_sync(chat_id, messages)
 
-    # Mark as sent
-    for article in articles:
-        article.status = 'sent'
-        save_article(article)
+        if mark_sent and sent_count == len(messages):
+            for article in articles:
+                article.status = 'sent'
+                save_article(article)
+        elif mark_sent:
+            log.warning(
+                "dispatch_partial_not_marking_sent",
+                chat_id=chat_id,
+                sent=sent_count,
+                total_messages=len(messages),
+            )
 
-    log.info("dispatch_completed", chat_id=chat_id, total_messages=sent_count)
+        log.info("dispatch_completed", chat_id=chat_id, total_messages=sent_count)
 
-    return {"status": "ok", "sent": sent_count, "total_articles": len(articles)}
+        return {"status": "ok", "sent": sent_count, "total_articles": len(articles)}
+    finally:
+        release_dispatch_schedule_lock(today)
+        if release_pipeline_lock:
+            release_digest_lock(today)
