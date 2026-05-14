@@ -1,4 +1,5 @@
 .env
+.venv/
 data/
 logs/
 __pycache__/
@@ -6,3 +7,4 @@ __pycache__/
 .pytest_cache/
 .coverage
 *.egg-info/
+TODO/

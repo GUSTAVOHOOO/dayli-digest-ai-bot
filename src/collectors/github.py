@@ -1,14 +1,50 @@
-import httpx
+try:
+    import httpx
+except ImportError:
+    class _HttpxUnavailable:
+        @staticmethod
+        def get(*args, **kwargs):
+            raise RuntimeError("httpx package is not installed")
+
+    httpx = _HttpxUnavailable()
+import json
 from datetime import datetime, timedelta
 from typing import List
 from src.collectors.base import BaseCollector
 from src.models.article import Article
-from src.storage.sqlite import is_article_processed
+from src.processors.github_velocity import RepoSnapshot, build_repo_metadata
+from src.storage.sqlite import get_latest_repo_snapshot, is_article_processed, save_repo_snapshot
 from src.utils.circuit import circuit_breaker
 from src.utils.logger import get_logger
-from src.utils.config_loader import load_config
 
 log = get_logger(__name__)
+
+GITHUB_TOPICS = [
+    "agents",
+    "mcp",
+    "rag",
+    "vector-database",
+    "browser-use",
+    "voice-ai",
+    "multi-agent",
+    "ai-agents",
+    "llmops",
+    "inference",
+    "reasoning",
+    "tool-calling",
+    "memory",
+    "computer-use",
+    "workflow-automation",
+    "coding-agents",
+    "ai-browser",
+    "ai-search",
+    "agent-framework",
+    "local-llm",
+    "model-serving",
+    "observability",
+    "synthetic-data",
+    "evals",
+]
 
 class GitHubCollector(BaseCollector):
     source = "github"
@@ -16,8 +52,7 @@ class GitHubCollector(BaseCollector):
     def __init__(self):
         super().__init__()
         self.api_url = "https://api.github.com/search/repositories"
-        # We search for these topics to find relevant AI projects
-        self.topics = ["llm", "generative-ai", "artificial-intelligence", "machine-learning"]
+        self.topics = GITHUB_TOPICS
 
     def get_domain(self) -> str:
         return "github.com"
@@ -59,9 +94,29 @@ class GitHubCollector(BaseCollector):
                     description = repo.get('description', '')
                     url = repo.get('html_url', '')
                     stars = repo.get('stargazers_count', 0)
-                    
-                    # We combine name and description for the "clean_text" so the analyzer has context
-                    full_content = f"Repository: {title}\nStars: {stars}\nDescription: {description}"
+                    previous_snapshot = get_latest_repo_snapshot(title)
+                    repo_snapshot = RepoSnapshot.from_repo(repo)
+                    metadata = build_repo_metadata(repo, previous_snapshot, captured_at=None)
+                    save_repo_snapshot(repo_snapshot)
+                    velocity = metadata["github_velocity"]
+                    log.info(
+                        "github_velocity_calculated",
+                        repo=title,
+                        repo_score=metadata["repo_score"],
+                        stars_per_day=velocity["stars_per_day"],
+                        fallback=velocity["fallback_used"],
+                        signals=velocity["signals"],
+                    )
+
+                    full_content = (
+                        f"Repository: {title}\n"
+                        f"Stars: {stars}\n"
+                        f"Forks: {repo.get('forks_count', 0)}\n"
+                        f"Created: {repo.get('created_at', '')}\n"
+                        f"Pushed: {repo.get('pushed_at', '')}\n"
+                        f"Description: {description}\n"
+                        f"Repo metadata JSON: {json.dumps(metadata, sort_keys=True)}"
+                    )
 
                     article = Article(
                         url=url,

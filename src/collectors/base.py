@@ -1,9 +1,13 @@
 import time
 import abc
 from typing import List
-import redis
+try:
+    import redis
+except ImportError:
+    redis = None
 import os
 from src.models.article import Article
+from src.utils.metrics import measure_stage, metric_articles_collected
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -16,11 +20,13 @@ class RateLimiter:
         self.domain = domain
         self.max_tokens = max_tokens
         self.refill_seconds = refill_seconds
-        self._redis = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        self._redis = redis.Redis.from_url(REDIS_URL, decode_responses=True) if redis is not None else None
         self._key = f"rate:{domain}"
 
     def _refill(self):
         now = time.time()
+        if self._redis is None:
+            return float(self.max_tokens)
         try:
             data = self._redis.hgetall(self._key)
             if not data:
@@ -37,17 +43,19 @@ class RateLimiter:
             new_tokens = min(float(self.max_tokens), tokens + elapsed * refill_rate)
             self._redis.hset(self._key, mapping={'tokens': new_tokens, 'last_refill': now})
             return new_tokens
-        except (redis.RedisError, ValueError, TypeError):
+        except (_redis_error(), ValueError, TypeError):
             return float(self.max_tokens)
 
     def try_acquire(self) -> bool:
         """Tries to acquire a token, returns True if successful."""
         tokens = self._refill()
+        if self._redis is None:
+            return True
         if tokens >= 1:
             try:
                 self._redis.hincrbyfloat(self._key, 'tokens', -1.0)
                 return True
-            except redis.RedisError:
+            except _redis_error():
                 return True # Fallback: allow if redis is down
         return False
 
@@ -84,9 +92,19 @@ class BaseCollector(abc.ABC):
 
         log.info("collect_started", source=self.source)
         try:
-            articles = self.fetch()
+            with measure_stage("collect", source=self.source):
+                articles = self.fetch()
             log.info("articles_collected", source=self.source, count=len(articles))
+            metric_articles_collected(len(articles), self.source)
             return articles
         except Exception as e:
             log.error("collect_failed", source=self.source, error=str(e))
             raise
+
+
+class _NoRedisError(Exception):
+    pass
+
+
+def _redis_error():
+    return redis.RedisError if redis is not None else _NoRedisError

@@ -1,5 +1,21 @@
-import feedparser
-import httpx
+try:
+    import feedparser
+except ImportError:
+    class _FeedparserUnavailable:
+        @staticmethod
+        def parse(*args, **kwargs):
+            raise RuntimeError("feedparser package is not installed")
+
+    feedparser = _FeedparserUnavailable()
+try:
+    import httpx
+except ImportError:
+    class _HttpxUnavailable:
+        @staticmethod
+        def get(*args, **kwargs):
+            raise RuntimeError("httpx package is not installed")
+
+    httpx = _HttpxUnavailable()
 from typing import List
 from src.collectors.base import BaseCollector
 from src.models.article import Article
@@ -34,12 +50,15 @@ class ArxivCollector(BaseCollector):
                     title = entry.get('title', '')
                     url = entry.get('link', '')
                     date = entry.get('published', '')
+                    authors = ", ".join(author.get("name", "") for author in entry.get("authors", []) if author.get("name"))
+                    abstract = entry.get("summary", "")
 
                     article = Article(
                         url=url,
                         title=title,
                         source=self.source,
                         date_published=date,
+                        clean_text=f"Title: {title}\nAuthors: {authors}\nAbstract: {abstract}".strip(),
                     )
 
                     if not is_article_processed(article.md5_hash):

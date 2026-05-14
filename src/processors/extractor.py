@@ -4,7 +4,14 @@ import time
 import trafilatura
 import asyncio
 from typing import Optional
-from src.storage.redis_cache import get_jina_cache, set_jina_cache, add_to_dlq
+from urllib.parse import urlparse
+from src.storage.redis_cache import (
+    add_to_dlq,
+    get_jina_cache,
+    get_readme_cache,
+    set_jina_cache,
+    set_readme_cache,
+)
 from src.utils.logger import get_logger
 from src.storage.sqlite import save_article
 from src.models.article import Article
@@ -14,6 +21,7 @@ log = get_logger(__name__)
 
 TIMEOUT = 15.0
 JINA_BASE_URL = "https://r.jina.ai/"
+GITHUB_API_BASE = "https://api.github.com/repos"
 
 async def extract_with_crawl4ai_async(url: str) -> Optional[str]:
     """Asynchronous extraction using Crawl4AI with stealth mode."""
@@ -124,6 +132,43 @@ def extract_with_trafilatura(url: str) -> Optional[str]:
         log.error("trafilatura_error", url=url, error=str(e))
         return None
 
+
+def extract_github_readme(url: str) -> Optional[str]:
+    """Fetches README markdown for GitHub repository URLs."""
+    repo_key = _github_repo_key(url)
+    if not repo_key:
+        return None
+
+    cached = get_readme_cache(repo_key)
+    if cached:
+        log.info("github_readme_cache_hit", repo=repo_key)
+        return cached
+
+    try:
+        response = httpx.get(
+            f"{GITHUB_API_BASE}/{repo_key}/readme",
+            headers={
+                "Accept": "application/vnd.github.raw",
+                "User-Agent": "DailyDigestBot/1.0",
+            },
+            timeout=TIMEOUT,
+        )
+        if response.status_code == 404:
+            log.warning("github_readme_missing", repo=repo_key)
+            return None
+        if response.status_code in {403, 429}:
+            log.warning("github_readme_rate_limited", repo=repo_key, status=response.status_code)
+            return None
+        response.raise_for_status()
+        content = response.text.strip()
+        if content:
+            set_readme_cache(repo_key, content)
+            log.info("github_readme_extracted", repo=repo_key, chars=len(content))
+            return content
+    except Exception as e:
+        log.warning("github_readme_failed", repo=repo_key, error=str(e))
+    return None
+
 def extract_article(article_dict: dict) -> dict:
     """Main extraction logic: Crawl4AI -> Jina AI -> Trafilatura fallback."""
     url = article_dict['url']
@@ -132,7 +177,23 @@ def extract_article(article_dict: dict) -> dict:
     log.info("extraction_started", url=url)
 
     existing_content = article_dict.get('clean_text')
-    if existing_content and len(existing_content) > 100:
+    if article_dict.get("source") == "github":
+        readme = extract_github_readme(url)
+        if readme and len(readme) > 100:
+            prefix = existing_content or ""
+            article_dict['clean_text'] = f"{prefix}\n\nREADME:\n{readme}".strip()
+            article_dict['status'] = 'processed'
+            article = Article.from_dict(article_dict)
+            save_article(article)
+            return article_dict
+        if existing_content and len(existing_content) > 100:
+            log.info("github_readme_fallback_to_repo_metadata", url=url)
+            article_dict['status'] = 'processed'
+            article = Article.from_dict(article_dict)
+            save_article(article)
+            return article_dict
+
+    if existing_content and len(existing_content) > 100 and not _is_source_context(existing_content):
         log.info("extraction_content_supplied", url=url, chars=len(existing_content))
         article_dict['status'] = 'processed'
         article = Article.from_dict(article_dict)
@@ -143,6 +204,8 @@ def extract_article(article_dict: dict) -> dict:
     cached = get_jina_cache(md5_url)
     if cached:
         log.info("extraction_cache_hit", url=url)
+        if existing_content and _is_source_context(existing_content):
+            cached = f"{existing_content}\n\nCONTENT:\n{cached}"
         article_dict['clean_text'] = cached
         article_dict['status'] = 'processed'
         return article_dict
@@ -161,6 +224,8 @@ def extract_article(article_dict: dict) -> dict:
         content = extract_with_trafilatura(url)
 
     if content and len(content) > 100:
+        if existing_content and _is_source_context(existing_content):
+            content = f"{existing_content}\n\nCONTENT:\n{content}"
         article_dict['clean_text'] = content
         article_dict['status'] = 'processed'
         set_jina_cache(md5_url, content) # Save back to cache
@@ -194,3 +259,20 @@ def process_extract(self, article_dict: dict):
             add_to_dlq(article_dict, str(e))
             return {"status": "failed", "reason": str(e)}
         raise self.retry(exc=e, countdown=60)
+
+
+def _github_repo_key(url: str) -> str:
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+    if domain != "github.com":
+        return ""
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 2:
+        return ""
+    return f"{parts[0]}/{parts[1]}"
+
+
+def _is_source_context(content: str) -> bool:
+    return str(content or "").startswith("Source: ") and "Inclusion reason:" in str(content or "")

@@ -2,7 +2,10 @@ import os
 import sys
 import logging
 from logging.handlers import RotatingFileHandler
-import structlog
+try:
+    import structlog
+except ImportError:
+    structlog = None
 from pathlib import Path
 
 LOG_DIR = Path(os.getenv('LOG_DIR', 'logs'))
@@ -13,6 +16,10 @@ BACKUP_COUNT = 7
 def configure_logging():
     """Configures structlog with JSON output and rotating file handlers."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    if structlog is None:
+        logging.basicConfig(level=logging.INFO)
+        return
 
     # Avoid duplicate configuration
     if structlog.is_configured():
@@ -62,4 +69,26 @@ def configure_logging():
 def get_logger(name: str):
     """Retrieves a configured structlog logger."""
     configure_logging()
+    if structlog is None:
+        return _FallbackLogger(logging.getLogger(name))
     return structlog.get_logger(name)
+
+
+class _FallbackLogger:
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
+
+    def info(self, event: str, **kwargs):
+        self.logger.info(self._format(event, kwargs))
+
+    def warning(self, event: str, **kwargs):
+        self.logger.warning(self._format(event, kwargs))
+
+    def error(self, event: str, **kwargs):
+        self.logger.error(self._format(event, kwargs))
+
+    def _format(self, event: str, kwargs: dict) -> str:
+        if not kwargs:
+            return event
+        fields = " ".join(f"{key}={value}" for key, value in kwargs.items())
+        return f"{event} {fields}"

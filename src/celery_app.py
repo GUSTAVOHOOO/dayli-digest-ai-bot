@@ -1,9 +1,72 @@
 import os
-from celery import Celery
-from kombu import Queue
+try:
+    from celery import Celery
+    from celery.schedules import crontab
+    from kombu import Queue
+except ImportError:
+    Celery = None
+
+    def Queue(*args, **kwargs):
+        return {"args": args, "kwargs": kwargs}
+
+    def crontab(*args, **kwargs):
+        return {"args": args, "kwargs": kwargs}
+
 from src.utils.config_loader import load_config
 
-app = Celery('digestbot')
+
+class _LocalTask:
+    def __init__(self, func, bind=False, **options):
+        self.func = func
+        self.bind = bind
+        self.name = options.get("name", func.__name__)
+        self.max_retries = options.get("max_retries", 0)
+        self.request = type("Request", (), {"retries": 0})()
+
+    def __call__(self, *args, **kwargs):
+        if self.bind:
+            return self.func(self, *args, **kwargs)
+        return self.func(*args, **kwargs)
+
+    def run(self, *args, **kwargs):
+        return self.__call__(*args, **kwargs)
+
+    def delay(self, *args, **kwargs):
+        return self.__call__(*args, **kwargs)
+
+    def apply_async(self, args=None, kwargs=None, countdown=None):
+        return self.__call__(*(args or ()), **(kwargs or {}))
+
+    def retry(self, *args, **kwargs):
+        raise RuntimeError("celery_unavailable_retry_requested")
+
+
+class _LocalConf(dict):
+    def __getattr__(self, key):
+        return self.get(key)
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+
+class _LocalCelery:
+    def __init__(self, name):
+        self.name = name
+        self.conf = _LocalConf()
+
+    def task(self, *decorator_args, **decorator_kwargs):
+        def decorate(func):
+            return _LocalTask(func, **decorator_kwargs)
+
+        if decorator_args and callable(decorator_args[0]):
+            return decorate(decorator_args[0])
+        return decorate
+
+    def start(self):
+        return None
+
+
+app = Celery('digestbot') if Celery is not None else _LocalCelery('digestbot')
 
 # Load YAML config
 config = load_config('config/celery.yaml')
@@ -42,15 +105,14 @@ app.conf.task_reject_on_worker_lost = True
 app.conf.worker_prefetch_multiplier = 1
 
 # Import tasks to ensure discovery (MUST be after app is defined but before it is used by workers)
-import src.orchestrator
-import src.processors.extractor
-import src.processors.analyzer
-import src.processors.summarizer
-import src.processors.scorer
-import src.dispatchers.telegram
+if Celery is not None:
+    import src.orchestrator
+    import src.processors.extractor
+    import src.processors.analyzer
+    import src.processors.summarizer
+    import src.processors.scorer
+    import src.dispatchers.telegram
 
-# Beat schedule
-from celery.schedules import crontab
 app.conf.beat_schedule = {
     'daily-digest': {
         'task': 'src.orchestrator.trigger_all',

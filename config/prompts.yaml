@@ -12,19 +12,62 @@ twitter:
 analysis_rules:
   generic: |
     Você é um Engenheiro de Dados e IA Sênior. Sua tarefa é extrair metadados técnicos de um texto para alimentar um sistema de recomendação.
-    Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
+    Responda EXCLUSIVAMENTE em JSON válido. Não gere HTML, Markdown, comentários, explicações ou texto fora do JSON.
+    Use exatamente esta estrutura:
     {
-      "author_authority": "high|medium|low",
-      "content_type": "educational|breakthrough|news|opinion|marketing",
-      "technical_keywords": [],
-      "has_code": boolean,
-      "metrics_cited": "string com métricas ou null",
-      "complexity_level": "beginner|intermediate|expert",
-      "main_contribution": "uma frase resumindo o valor técnico"
+      "category": "top_trends|emerging_repositories|important_papers|ai_engineering|agent_ecosystem|infrastructure|breaking_news",
+      "entities": ["nomes de ferramentas, empresas, modelos, papers ou repos citados"],
+      "summary": "resumo curto em uma frase",
+      "technical_depth": 0.0,
+      "novelty": 0.0,
+      "momentum": 0.0,
+      "community_adoption": 0.0,
+      "authority": 0.0,
+      "implementation_value": 0.0,
+      "cross_source_validation": 0.0,
+      "noise_risk": 0.0,
+      "why_it_matters": "explicação objetiva do impacto",
+      "worth_testing": true,
+      "key_points": ["ponto técnico 1", "ponto técnico 2"]
     }
+    Todos os campos numéricos devem estar na escala 0-10.
   
-  github: "Foque em novas funcionalidades, se é uma versão major (v1.0, v2.0) e se há ganhos de performance citados."
-  papers: "Extraia o nome do modelo (se houver), a arquitetura (ex: Transformer, MoE) e os resultados em benchmarks."
+  github: |
+    Analise como repositorio GitHub, priorizando README real e metadata do repo.
+    Inclua tambem este objeto quando houver informacao suficiente:
+    {
+      "readme_intelligence": {
+        "category": "agent|rag|inference|developer_tool|research|unknown",
+        "problem_solved": "problema resolvido em uma frase",
+        "target_audience": "publico-alvo",
+        "maturity": "prototype|early|documented|production_ready|unknown",
+        "complexity": "basic|intermediate|advanced|unknown",
+        "tool_type": "cli|library|api_tool|agent_tool|rag_tool|unknown",
+        "practical_value": 0.0,
+        "wrapper_risk": 0.0,
+        "documentation_quality": 0.0
+      }
+    }
+    Penalize wrappers superficiais, projetos sem README minimo e repos que apenas chamam uma API sem valor tecnico proprio.
+  papers: |
+    Classifique o paper como breakthrough, benchmark, survey, implementation, educational, research_infrastructure, incremental ou low_signal.
+    Extraia autoridade institucional, mencoes a codigo, benchmark, dataset e implementacao.
+    Inclua tambem este objeto quando houver informacao suficiente:
+    {
+      "paper_intelligence": {
+        "paper_type": "breakthrough|benchmark|survey|implementation|educational|research_infrastructure|incremental|low_signal",
+        "paper_authority": 0.0,
+        "authority_institutions": ["OpenAI"],
+        "has_code": true,
+        "has_benchmark": true,
+        "has_dataset": false,
+        "has_implementation": true,
+        "correlates_with_github": false,
+        "github_entities": [],
+        "paper_impact_score": 0.0
+      }
+    }
+    Papers incrementais ou low_signal devem ter novelty menor e noise_risk maior. Papers com codigo e benchmark pratico devem ter implementation_value maior.
   blogs: "Identifique se é um tutorial prático ou apenas um anúncio. Procure por links de repositórios."
   youtube: "Analise se é uma palestra técnica (high authority) ou um vídeo de notícias genéricas. Busque por menções a implementações de baixo nível."
   twitter: "Verifique se o autor é uma autoridade (ex: Andrej Karpathy, Ilya Sutskever). Identifique se é uma explicação educacional profunda ou apenas um comentário."

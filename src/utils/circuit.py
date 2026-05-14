@@ -1,5 +1,11 @@
-import pybreaker
-import redis
+try:
+    import pybreaker
+except ImportError:
+    pybreaker = None
+try:
+    import redis
+except ImportError:
+    redis = None
 import os
 from functools import wraps
 from typing import Callable
@@ -10,10 +16,14 @@ _breakers = {}
 
 def get_redis():
     """Provides a Redis client for circuit breaker state."""
+    if redis is None:
+        raise RuntimeError("redis package is not installed")
     return redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
-def get_circuit_breaker(source: str) -> pybreaker.CircuitBreaker:
+def get_circuit_breaker(source: str):
     """Returns a singleton circuit breaker for a specific source."""
+    if pybreaker is None:
+        return _NoopBreaker()
     if source not in _breakers:
         # Use built-in CircuitRedisStorage if possible, or fallback to memory
         try:
@@ -30,6 +40,11 @@ def get_circuit_breaker(source: str) -> pybreaker.CircuitBreaker:
             state_storage=storage,
         )
     return _breakers[source]
+
+
+class _NoopBreaker:
+    def call(self, func: Callable, *args, **kwargs):
+        return func(*args, **kwargs)
 
 def circuit_breaker(source: str):
     """Decorator to apply circuit breaker to a function."""

@@ -19,6 +19,61 @@ youtube_channels:
 # Arxiv and Blogs (General high-quality feeds)
 arxiv:
   - https://export.arxiv.org/rss/cs.AI
+
+# High-signal technical and official sources. Collectors accept this structured
+# list so authority/category stays configurable instead of hardcoded.
+blog_sources:
+  - name: OpenAI Blog
+    url: https://openai.com/news/rss.xml
+    category: official_lab
+    authority: high
+    inclusion_reason: Official model, API, safety and product announcements.
+  - name: Anthropic News
+    url: http://rsshub:1200/anthropic/news
+    category: official_lab
+    authority: high
+    inclusion_reason: Official Claude and Anthropic research/product updates.
+  - name: Google DeepMind Blog
+    url: https://deepmind.google/blog/rss.xml
+    category: official_lab
+    authority: high
+    inclusion_reason: Official high-impact AI research updates.
+  - name: NVIDIA Generative AI Blog
+    url: https://developer.nvidia.com/blog/category/generative-ai/feed/
+    category: infrastructure
+    authority: high
+    inclusion_reason: GPU, inference and generative AI infrastructure updates.
+  - name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+    category: engineering_platform
+    authority: high
+    inclusion_reason: Practical open-source model, dataset and tooling updates.
+  - name: Together AI Blog
+    url: https://www.together.ai/blog/rss.xml
+    category: agent_ecosystem
+    authority: medium
+    inclusion_reason: Open model serving and inference platform updates.
+  - name: Cloudflare Blog AI
+    url: https://blog.cloudflare.com/tag/ai/rss/
+    category: infrastructure
+    authority: medium
+    inclusion_reason: Inference, edge and AI infrastructure engineering.
+  - name: Vercel Blog
+    url: https://vercel.com/atom
+    category: developer_platform
+    authority: medium
+    inclusion_reason: AI SDK and frontend AI engineering updates.
+  - name: Replicate Blog
+    url: https://replicate.com/blog/rss
+    category: model_serving
+    authority: medium
+    inclusion_reason: Model deployment and inference product updates.
+  - name: Weaviate Blog
+    url: https://weaviate.io/blog/rss.xml
+    category: vector_database
+    authority: medium
+    inclusion_reason: Vector search and RAG infrastructure.
+
 blogs:
   - https://openai.com/news/rss.xml
   - https://huggingface.co/blog/feed.xml

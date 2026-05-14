@@ -1,4 +1,19 @@
-import httpx
+try:
+    import httpx
+except ImportError:
+    class _HttpxUnavailable:
+        class TimeoutException(Exception):
+            pass
+
+        class HTTPStatusError(Exception):
+            def __init__(self):
+                self.response = type("Response", (), {"status_code": 0})()
+
+        @staticmethod
+        def post(*args, **kwargs):
+            raise RuntimeError("httpx package is not installed")
+
+    httpx = _HttpxUnavailable()
 import os
 from datetime import datetime
 from typing import Optional
